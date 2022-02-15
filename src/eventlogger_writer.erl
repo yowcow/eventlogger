@@ -40,9 +40,9 @@ init(Args) ->
                     #state{},
                     Args),
     case eventlogger_rotator:open_rotated(State#state.file,
-                                         State#state.modes,
-                                         State#state.maxbytes,
-                                         State#state.rotate)
+                                          State#state.modes,
+                                          State#state.maxbytes,
+                                          State#state.rotate)
     of
         {{ok, IoDevice}, WrittenBytes} ->
             {ok, State#state{iodev = IoDevice, wbytes = WrittenBytes}};
@@ -51,8 +51,9 @@ init(Args) ->
     end.
 
 -spec terminate(Reason :: term(), State :: state()) -> ok.
-terminate(Reason, State) ->
+terminate(Reason, #state{iodev = IoDevice} = State) ->
     ?LOG_INFO("terminate (~p, ~p)", [Reason, State]),
+    file:close(IoDevice),
     ok.
 
 handle_call(Req, State) ->
@@ -79,9 +80,9 @@ handle_event({Event, Bytes} = Req, #state{event = Event} = State) ->
                               _ ->
                                   _ = file:close(IoDevice),
                                   case eventlogger_rotator:open_rotated(State#state.file,
-                                                                       State#state.modes,
-                                                                       State#state.maxbytes,
-                                                                       State#state.rotate)
+                                                                        State#state.modes,
+                                                                        State#state.maxbytes,
+                                                                        State#state.rotate)
                                   of
                                       {{ok, IoD}, WBytes} ->
                                           {ok, {WBytes, IoD}};

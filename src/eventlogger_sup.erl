@@ -19,12 +19,7 @@ start_link() ->
         {ok, _} ->
             case application:get_env(eventlogger, loggers) of
                 {ok, Loggers} ->
-                    lists:map(
-                      fun({Writer, Id, Args}) ->
-                              add_writer(Writer, Id, Args)
-                      end,
-                      Loggers
-                     );
+                    lists:map(fun({Writer, Id, Args}) -> add_writer(Writer, Id, Args) end, Loggers);
                 _ ->
                     ok
             end;
