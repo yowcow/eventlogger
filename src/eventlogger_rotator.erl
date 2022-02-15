@@ -1,13 +1,13 @@
 -module(eventlogger_rotator).
 
--export([open_rotated/4]).
+-export([open/4, close/1]).
 
--spec open_rotated(File :: string(),
-                   Modes :: [file:mode()],
-                   MaxBytes :: non_neg_integer(),
-                   Rotate :: non_neg_integer()) ->
-                      {ok, file:io_device()} | {error, term()}.
-open_rotated(File, Modes, MaxBytes, Rotate) ->
+-spec open(File :: string(),
+           Modes :: [file:mode()],
+           MaxBytes :: non_neg_integer(),
+           Rotate :: non_neg_integer()) ->
+              {ok, file:io_device()} | {error, term()}.
+open(File, Modes, MaxBytes, Rotate) ->
     WrittenBytes =
         case {filelib:is_regular(File), MaxBytes} of
             {false, _} ->
@@ -52,3 +52,11 @@ rotate_files(File, Rotate, Index) ->
             ok
     end,
     rotate_files(File, Rotate, Index - 1).
+
+-spec close(IoDevice :: file:io_device()) -> ok.
+close(IoDevice) ->
+    %% flush and ensure close
+    _ = file:datasync(IoDevice),
+    _ = file:close(IoDevice),
+    _ = file:close(IoDevice),
+    ok.

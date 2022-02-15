@@ -39,10 +39,10 @@ init(Args) ->
                     end,
                     #state{},
                     Args),
-    case eventlogger_rotator:open_rotated(State#state.file,
-                                          State#state.modes,
-                                          State#state.maxbytes,
-                                          State#state.rotate)
+    case eventlogger_rotator:open(State#state.file,
+                                  State#state.modes,
+                                  State#state.maxbytes,
+                                  State#state.rotate)
     of
         {{ok, IoDevice}, WrittenBytes} ->
             {ok, State#state{iodev = IoDevice, wbytes = WrittenBytes}};
@@ -78,11 +78,11 @@ handle_event({Event, Bytes} = Req, #state{event = Event} = State) ->
                               true ->
                                   {ok, {CurWrittenBytes, IoDevice}};
                               _ ->
-                                  _ = file:close(IoDevice),
-                                  case eventlogger_rotator:open_rotated(State#state.file,
-                                                                        State#state.modes,
-                                                                        State#state.maxbytes,
-                                                                        State#state.rotate)
+                                  eventlogger_rotator:close(IoDevice),
+                                  case eventlogger_rotator:open(State#state.file,
+                                                                State#state.modes,
+                                                                State#state.maxbytes,
+                                                                State#state.rotate)
                                   of
                                       {{ok, IoD}, WBytes} ->
                                           {ok, {WBytes, IoD}};
