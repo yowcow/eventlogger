@@ -8,12 +8,12 @@
 
 -record(state,
         {event = default :: atom(),
-         file :: string(),
+         file = undefined :: string() | undefined,
          modes = [append, raw, delayed_write] :: [file:mode()],
          maxbytes = infinity :: maxbytes(),
          count = infinity :: count(),
          delim = <<"\n">> :: binary(),
-         iodev :: file:io_device(),
+         iodev = undefined :: file:io_device() | undefined,
          wbytes = 0 :: integer()}).
 
 -type maxbytes() :: eventlogger_rotator:maxbytes().
