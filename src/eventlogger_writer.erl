@@ -11,13 +11,19 @@
          file :: string(),
          modes = [append, raw, delayed_write] :: [file:mode()],
          maxbytes = 0 :: non_neg_integer(),
-         rotate = 1 :: non_neg_integer(),
+         count = 1 :: non_neg_integer(),
          delim = <<"\n">> :: binary(),
          iodev :: file:io_device(),
          wbytes = 0 :: integer()}).
 
 -type state() :: #state{}.
--type args() :: [term()].
+-type args() ::
+    [{event, atom()} |
+     {file, string()} |
+     {modes, [file:mode()]} |
+     {maxbytes, non_neg_integer()} |
+     {count, non_neg_integer()} |
+     {delim, binary()}].
 
 -spec init(Args :: args()) -> {ok, state()}.
 init(Args) ->
@@ -30,8 +36,8 @@ init(Args) ->
                             Acc#state{modes = V};
                         ({maxbytes, V}, Acc) ->
                             Acc#state{maxbytes = V};
-                        ({rotate, V}, Acc) ->
-                            Acc#state{rotate = V};
+                        ({count, V}, Acc) ->
+                            Acc#state{count = V};
                         ({delim, V}, Acc) ->
                             Acc#state{delim = V};
                         (_, Acc) ->
@@ -42,7 +48,7 @@ init(Args) ->
     case eventlogger_rotator:open(State#state.file,
                                   State#state.modes,
                                   State#state.maxbytes,
-                                  State#state.rotate)
+                                  State#state.count)
     of
         {{ok, IoDevice}, WrittenBytes} ->
             {ok, State#state{iodev = IoDevice, wbytes = WrittenBytes}};
@@ -56,9 +62,20 @@ terminate(Reason, #state{iodev = IoDevice} = State) ->
     file:close(IoDevice),
     ok.
 
+handle_call(dump_state, State) ->
+    {ok,
+     #{event => State#state.event,
+       file => State#state.file,
+       modes => State#state.modes,
+       maxbytes => State#state.maxbytes,
+       count => State#state.count,
+       delim => State#state.delim,
+       iodev => State#state.iodev,
+       wbytes => State#state.wbytes},
+     State};
 handle_call(Req, State) ->
     ?LOG_WARNING("unhandled call (~p, ~p)", [Req, State]),
-    {reply, {error, {unhandled_call, Req}}, State}.
+    {ok, {error, {unhandled_call, Req}}, State}.
 
 handle_event({Event, Bytes} = Req, #state{event = Event} = State) ->
     #state{maxbytes = MaxBytes,
@@ -82,7 +99,7 @@ handle_event({Event, Bytes} = Req, #state{event = Event} = State) ->
                                   case eventlogger_rotator:open(State#state.file,
                                                                 State#state.modes,
                                                                 State#state.maxbytes,
-                                                                State#state.rotate)
+                                                                State#state.count)
                                   of
                                       {{ok, IoD}, WBytes} ->
                                           {ok, {WBytes, IoD}};

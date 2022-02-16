@@ -2,12 +2,14 @@
 
 -export([open/4, close/1]).
 
+-include_lib("kernel/include/logger.hrl").
+
 -spec open(File :: string(),
            Modes :: [file:mode()],
            MaxBytes :: non_neg_integer(),
-           Rotate :: non_neg_integer()) ->
+           Count :: non_neg_integer()) ->
               {ok, file:io_device()} | {error, term()}.
-open(File, Modes, MaxBytes, Rotate) ->
+open(File, Modes, MaxBytes, Count) ->
     WrittenBytes =
         case {filelib:is_regular(File), MaxBytes} of
             {false, _} ->
@@ -22,15 +24,32 @@ open(File, Modes, MaxBytes, Rotate) ->
                     true ->
                         CurWrittenBytes;
                     _ ->
-                        rotate_files(File, Rotate, Rotate),
+                        rotate_files(File, Count),
                         0
                 end
         end,
     {file:open(File, Modes), WrittenBytes}.
 
-rotate_files(_File, _Rotate, 0) ->
+rotate_files(File, 0) ->
+    %% without limit on rotation count
+    rotate_infinite(File, 1);
+rotate_files(File, Count) ->
+    %% with limit on rotation count
+    rotate_finite(File, Count, Count).
+
+rotate_infinite(File, Index) ->
+    CurFile = [File, ".", integer_to_list(Index)],
+    case filelib:is_regular(CurFile) of
+        false ->
+            ?LOG_DEBUG("(~p) renaming ~p -> ~p", [?MODULE, File, CurFile]),
+            file:rename(File, CurFile);
+        _ ->
+            rotate_infinite(File, Index + 1)
+    end.
+
+rotate_finite(_File, _Rotate, 0) ->
     ok;
-rotate_files(File, Rotate, Index) ->
+rotate_finite(File, Count, Index) ->
     CurFile = [File, ".", integer_to_list(Index)],
     NextFile =
         case Index of
@@ -41,17 +60,12 @@ rotate_files(File, Rotate, Index) ->
         end,
     case filelib:is_regular(NextFile) of
         true ->
-            case filelib:is_regular(CurFile) of
-                true ->
-                    file:delete(CurFile, [raw]);
-                _ ->
-                    ok
-            end,
+            ?LOG_DEBUG("(~p) renaming ~p -> ~p", [?MODULE, NextFile, CurFile]),
             file:rename(NextFile, CurFile);
         _ ->
             ok
     end,
-    rotate_files(File, Rotate, Index - 1).
+    rotate_finite(File, Count, Index - 1).
 
 -spec close(IoDevice :: file:io_device()) -> ok.
 close(IoDevice) ->
