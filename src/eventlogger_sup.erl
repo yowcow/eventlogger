@@ -13,6 +13,7 @@
 -define(SERVER, ?MODULE).
 -define(MANAGER, eventlogger_manager).
 
+-spec start_link() -> supervisor:startlink_ret().
 start_link() ->
     Ret = supervisor:start_link({local, ?SERVER}, ?MODULE, []),
     case Ret of
