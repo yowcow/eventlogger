@@ -1,3 +1,5 @@
+![master branch](https://github.com/yowcow/eventlogger/actions/workflows/ci.yml/badge.svg?branch=master)
+
 eventlogger
 =====
 
