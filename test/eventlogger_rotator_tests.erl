@@ -85,12 +85,31 @@ open_close_test_() ->
                  FileData = file:read_file([TmpDir, "/test1.log"]),
                  File1Data = file:read_file([TmpDir, "/test1.log.1"]),
                  File2Data = file:read_file([TmpDir, "/test1.log.2"]),
+                 File3Exists = filelib:is_regular([tmpDir, "/test1.log.3"]),
                  [{Title ++ ": wbytes", ?_assertEqual(0, WBytes)},
                   {Title ++ ": test1.log", ?_assertEqual({ok, <<"foobarbuz345\n">>}, FileData)},
                   {Title ++ ": test1.log.1", ?_assertEqual({ok, <<"foobarbuz234\n">>}, File1Data)},
                   {Title ++ ": test1.log.2", ?_assertEqual({ok, <<"foobarbuz123\n">>}, File2Data)},
-                  {Title ++ ": deletes oldest",
-                   ?_assertNot(filelib:is_regular([TmpDir, "/test1.log.3"]))}]
+                  {Title ++ ": deletes oldest", ?_assertNot(File3Exists)}]
+              end},
+             {"count=infinity rotates current file to the greatest index",
+              fun(Title) ->
+                 {{ok, IoDevice}, WBytes} =
+                     eventlogger_rotator:open([TmpDir, "/test1.log"],
+                                              [write, append, raw],
+                                              ?MAXBYTES,
+                                              infinity),
+                 ok = file:write(IoDevice, <<"foobarbuz456\n">>),
+                 ok = eventlogger_rotator:close(IoDevice),
+                 FileData = file:read_file([TmpDir, "/test1.log"]),
+                 File1Data = file:read_file([TmpDir, "/test1.log.1"]),
+                 File2Data = file:read_file([TmpDir, "/test1.log.2"]),
+                 File3Data = file:read_file([TmpDir, "/test1.log.3"]),
+                 [{Title ++ ": wbytes", ?_assertEqual(0, WBytes)},
+                  {Title ++ ": test1.log", ?_assertEqual({ok, <<"foobarbuz456\n">>}, FileData)},
+                  {Title ++ ": test1.log.1", ?_assertEqual({ok, <<"foobarbuz234\n">>}, File1Data)},
+                  {Title ++ ": test1.log.2", ?_assertEqual({ok, <<"foobarbuz123\n">>}, File2Data)},
+                  {Title ++ ": test1.log.3", ?_assertEqual({ok, <<"foobarbuz345\n">>}, File3Data)}]
               end}],
         F = fun({Title, Fun}) -> Fun(Title) end,
         lists:map(F, Cases)
