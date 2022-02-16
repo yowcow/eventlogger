@@ -30,13 +30,13 @@ Add arbitrary logger configurations:
                            [{event, bar},
                             {file, "log/bar.log"},
                             {maxbytes, 1048576} %% 1 MB per file
-                            {count, 0} %% no limit on rotation count
+                            {count, infinity} %% no limit on rotation count
                            ]},
                           {eventlogger_writer,
                            buz_logger,
                            [{event, buz},
                             {file, "log/buz.log"},
-                            {maxbytes, 0} %% no limit no file size
+                            {maxbytes, infinity} %% no limit no file size
                            ]}
                          ]}
               ]}
