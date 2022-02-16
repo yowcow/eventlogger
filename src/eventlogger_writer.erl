@@ -8,12 +8,12 @@
 
 -record(state,
         {event = default :: atom(),
-         file :: string(),
+         file = undefined :: string() | undefined,
          modes = [append, raw, delayed_write] :: [file:mode()],
          maxbytes = infinity :: maxbytes(),
          count = infinity :: count(),
          delim = <<"\n">> :: binary(),
-         iodev :: file:io_device(),
+         iodev = undefined :: file:io_device() | undefined,
          wbytes = 0 :: integer()}).
 
 -type maxbytes() :: eventlogger_rotator:maxbytes().
@@ -89,7 +89,7 @@ handle_event({Event, Bytes} = Req, #state{event = Event} = State) ->
     case file:write(IoDevice, Output) of
         ok ->
             Ret = case MaxBytes of
-                      0 ->
+                      infinity ->
                           {ok, {WrittenBytes + byte_size(Output), IoDevice}};
                       _ ->
                           CurWrittenBytes = WrittenBytes + byte_size(Output),

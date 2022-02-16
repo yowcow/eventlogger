@@ -7,7 +7,7 @@
 
 -behaviour(supervisor).
 
--export([start_link/0, add_writer/3, delete_writer/2, notify/2, call/3]).
+-export([start_link/0, add_writer/3, delete_writer/3, notify/2, call/3]).
 -export([init/1]).
 
 -define(SERVER, ?MODULE).
@@ -33,9 +33,10 @@ start_link() ->
 add_writer(Writer, Id, Args) ->
     gen_event:add_handler(?MANAGER, {Writer, Id}, Args).
 
--spec delete_writer(Module :: module(), Id :: term()) -> ok | {error, term()}.
-delete_writer(Module, Id) ->
-    gen_event:delete_handler(?MANAGER, {Module, Id}).
+-spec delete_writer(Module :: module(), Id :: term(), Args :: term()) ->
+                       ok | {error, term()}.
+delete_writer(Module, Id, Args) ->
+    gen_event:delete_handler(?MANAGER, {Module, Id}, Args).
 
 -spec notify(Event :: atom(), Log :: binary()) -> ok.
 notify(Event, Log) ->

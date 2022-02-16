@@ -13,7 +13,7 @@
            Modes :: [file:mode()],
            MaxBytes :: maxbytes(),
            Count :: count()) ->
-              {ok, file:io_device()} | {error, term()}.
+              {{ok, file:io_device()} | {error, term()}, non_neg_integer()}.
 open(File, Modes, MaxBytes, Count) ->
     WrittenBytes =
         case {filelib:is_regular(File), MaxBytes} of
