@@ -89,7 +89,7 @@ handle_event({Event, Bytes} = Req, #state{event = Event} = State) ->
     case file:write(IoDevice, Output) of
         ok ->
             Ret = case MaxBytes of
-                      0 ->
+                      infinity ->
                           {ok, {WrittenBytes + byte_size(Output), IoDevice}};
                       _ ->
                           CurWrittenBytes = WrittenBytes + byte_size(Output),
