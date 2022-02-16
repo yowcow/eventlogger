@@ -2,27 +2,29 @@
 
 -behavior(gen_event).
 
--include_lib("kernel/include/logger.hrl").
-
 -export([init/1, terminate/2, handle_call/2, handle_event/2, handle_info/2]).
+
+-include_lib("kernel/include/logger.hrl").
 
 -record(state,
         {event = default :: atom(),
          file :: string(),
          modes = [append, raw, delayed_write] :: [file:mode()],
-         maxbytes = 0 :: non_neg_integer(),
-         count = 1 :: non_neg_integer(),
+         maxbytes = infinity :: maxbytes(),
+         count = infinity :: count(),
          delim = <<"\n">> :: binary(),
          iodev :: file:io_device(),
          wbytes = 0 :: integer()}).
 
+-type maxbytes() :: eventlogger_rotator:maxbytes().
+-type count() :: eventlogger_rotator:count().
 -type state() :: #state{}.
 -type args() ::
     [{event, atom()} |
      {file, string()} |
      {modes, [file:mode()]} |
-     {maxbytes, non_neg_integer()} |
-     {count, non_neg_integer()} |
+     {maxbytes, maxbytes()} |
+     {count, count()} |
      {delim, binary()}].
 
 -spec init(Args :: args()) -> {ok, state()}.

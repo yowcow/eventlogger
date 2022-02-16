@@ -2,12 +2,17 @@
 
 -export([open/4, close/1]).
 
+-export_type([maxbytes/0, count/0]).
+
+-type maxbytes() :: non_neg_integer() | infinity.
+-type count() :: non_neg_integer() | infinity.
+
 -include_lib("kernel/include/logger.hrl").
 
 -spec open(File :: string(),
            Modes :: [file:mode()],
-           MaxBytes :: non_neg_integer(),
-           Count :: non_neg_integer()) ->
+           MaxBytes :: maxbytes(),
+           Count :: count()) ->
               {ok, file:io_device()} | {error, term()}.
 open(File, Modes, MaxBytes, Count) ->
     WrittenBytes =
@@ -15,7 +20,7 @@ open(File, Modes, MaxBytes, Count) ->
             {false, _} ->
                 %% if file not exists, then just create a new file
                 0;
-            {_, 0} ->
+            {_, infinity} ->
                 %% if no max bytes is set, then just open the existing file
                 filelib:file_size(File);
             _ ->
@@ -30,13 +35,15 @@ open(File, Modes, MaxBytes, Count) ->
         end,
     {file:open(File, Modes), WrittenBytes}.
 
-rotate_files(File, 0) ->
+-spec rotate_files(File :: string(), Count :: count()) -> ok.
+rotate_files(File, infinity) ->
     %% without limit on rotation count
     rotate_infinite(File, 1);
 rotate_files(File, Count) ->
     %% with limit on rotation count
     rotate_finite(File, Count, Count).
 
+-spec rotate_infinite(File :: string(), Index :: non_neg_integer()) -> ok.
 rotate_infinite(File, Index) ->
     CurFile = [File, ".", integer_to_list(Index)],
     case filelib:is_regular(CurFile) of
@@ -47,7 +54,11 @@ rotate_infinite(File, Index) ->
             rotate_infinite(File, Index + 1)
     end.
 
-rotate_finite(_File, _Rotate, 0) ->
+-spec rotate_finite(File :: string(),
+                    Count :: non_neg_integer(),
+                    Index :: non_neg_integer()) ->
+                       ok.
+rotate_finite(_File, _Count, 0) ->
     ok;
 rotate_finite(File, Count, Index) ->
     CurFile = [File, ".", integer_to_list(Index)],

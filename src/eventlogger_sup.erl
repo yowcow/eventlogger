@@ -7,7 +7,7 @@
 
 -behaviour(supervisor).
 
--export([start_link/0, add_writer/3, delete_writer/2, notify/2]).
+-export([start_link/0, add_writer/3, delete_writer/2, notify/2, call/3]).
 -export([init/1]).
 
 -define(SERVER, ?MODULE).
@@ -40,6 +40,10 @@ delete_writer(Module, Id) ->
 -spec notify(Event :: atom(), Log :: binary()) -> ok.
 notify(Event, Log) ->
     gen_event:notify(?MANAGER, {Event, Log}).
+
+-spec call(Writer :: module(), Id :: term(), Req :: term()) -> term().
+call(Writer, Id, Req) ->
+    gen_event:call(?MANAGER, {Writer, Id}, Req).
 
 %% sup_flags() = #{strategy => strategy(),         % optional
 %%                 intensity => non_neg_integer(), % optional
