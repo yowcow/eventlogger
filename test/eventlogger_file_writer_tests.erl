@@ -55,6 +55,27 @@ handler_with_maxbytes_test_() ->
                   {Title ++ ": test1.log.1 output",
                    ?_assertEqual({ok, <<"foobar111\nfoobar222\n">>}, File1Data)},
                   {Title ++ ": state", ?_assertMatch(#{wbytes := 12}, State)}]
+              end},
+             {"somehow file has vanished but write continues",
+              fun(Title) ->
+                 file:delete(LogFile, [raw]),
+                 ok = gen_event:sync_notify(Pid, {foo, <<"vanished111">>}), %% 20 bytes
+                 FileData = file:read_file(LogFile),
+                 State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
+                 [{Title ++ ": test1.log output",
+                   ?_assertEqual({ok, <<"vanished111\n">>}, FileData)},
+                  {Title ++ ": state", ?_assertMatch(#{wbytes := 12}, State)}]
+              end},
+             {"somehow file is recreated but write continues",
+              fun(Title) ->
+                 ok = file:delete(LogFile, [raw]),
+                 ok = file:write_file(LogFile, <<"foo1\n">>, [write, raw]),
+                 ok = gen_event:sync_notify(Pid, {foo, <<"foo2">>}), %% 12 bytes
+                 FileData = file:read_file(LogFile),
+                 State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
+                 [{Title ++ ": test1.log output",
+                   ?_assertEqual({ok, <<"foo1\nfoo2\n">>}, FileData)},
+                  {Title ++ ": state", ?_assertMatch(#{wbytes := 10}, State)}]
               end}],
         F = fun({Title, Test}) -> Test(Title) end,
         lists:map(F, Cases)

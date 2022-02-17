@@ -9,7 +9,7 @@
 
 -include_lib("kernel/include/logger.hrl").
 
--spec open(File :: string(),
+-spec open(File :: file:name_all(),
            Modes :: [file:mode()],
            MaxBytes :: maxbytes(),
            Count :: count()) ->
@@ -35,7 +35,7 @@ open(File, Modes, MaxBytes, Count) ->
         end,
     {file:open(File, Modes), WrittenBytes}.
 
--spec rotate_files(File :: string(), Count :: count()) -> ok.
+-spec rotate_files(File :: file:name_all(), Count :: count()) -> ok.
 rotate_files(File, infinity) ->
     %% without limit on rotation count
     rotate_infinite(File, 1);
@@ -43,7 +43,7 @@ rotate_files(File, Count) ->
     %% with limit on rotation count
     rotate_finite(File, Count, Count).
 
--spec rotate_infinite(File :: string(), Index :: non_neg_integer()) -> ok.
+-spec rotate_infinite(File :: file:name_all(), Index :: non_neg_integer()) -> ok.
 rotate_infinite(File, Index) ->
     CurFile = [File, ".", integer_to_list(Index)],
     case filelib:is_regular(CurFile) of
