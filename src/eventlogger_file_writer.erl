@@ -1,4 +1,4 @@
--module(eventlogger_writer).
+-module(eventlogger_file_writer).
 
 -behavior(gen_event).
 
@@ -16,8 +16,8 @@
          iodev = undefined :: file:io_device() | undefined,
          wbytes = 0 :: integer()}).
 
--type maxbytes() :: eventlogger_rotator:maxbytes().
--type count() :: eventlogger_rotator:count().
+-type maxbytes() :: eventlogger_file_rotator:maxbytes().
+-type count() :: eventlogger_file_rotator:count().
 -type state() :: #state{}.
 -type args() ::
     [{event, atom()} |
@@ -47,7 +47,7 @@ init(Args) ->
                     end,
                     #state{},
                     Args),
-    case eventlogger_rotator:open(State#state.file,
+    case eventlogger_file_rotator:open(State#state.file,
                                   State#state.modes,
                                   State#state.maxbytes,
                                   State#state.count)
@@ -97,8 +97,8 @@ handle_event({Event, Bytes} = Req, #state{event = Event} = State) ->
                               true ->
                                   {ok, {CurWrittenBytes, IoDevice}};
                               _ ->
-                                  eventlogger_rotator:close(IoDevice),
-                                  case eventlogger_rotator:open(State#state.file,
+                                  eventlogger_file_rotator:close(IoDevice),
+                                  case eventlogger_file_rotator:open(State#state.file,
                                                                 State#state.modes,
                                                                 State#state.maxbytes,
                                                                 State#state.count)

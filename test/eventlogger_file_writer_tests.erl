@@ -1,4 +1,4 @@
--module(eventlogger_writer_tests).
+-module(eventlogger_file_writer_tests).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -10,7 +10,7 @@ handler_with_maxbytes_test_() ->
         LogFile = [TmpDir, "/test1.log"],
         ok =
             gen_event:add_handler(Pid,
-                                  {eventlogger_writer, 1},
+                                  {eventlogger_file_writer, 1},
                                   [{event, foo},
                                    {file, LogFile},
                                    {modes, [append, raw, write]},
@@ -30,7 +30,7 @@ handler_with_maxbytes_test_() ->
               fun(Title) ->
                  ok = gen_event:sync_notify(Pid, {bar, <<"foobar000">>}),
                  FileData = file:read_file(LogFile),
-                 State = gen_event:call(Pid, {eventlogger_writer, 1}, dump_state),
+                 State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
                  [{Title ++ ": test1.log output", ?_assertEqual({ok, <<>>}, FileData)},
                   {Title ++ ": state",
                    ?_assertMatch(#{modes := [append, raw, write], wbytes := 0}, State)}]
@@ -39,7 +39,7 @@ handler_with_maxbytes_test_() ->
               fun(Title) ->
                  ok = gen_event:sync_notify(Pid, {foo, <<"foobar111">>}),
                  FileData = file:read_file(LogFile),
-                 State = gen_event:call(Pid, {eventlogger_writer, 1}, dump_state),
+                 State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
                  [{Title ++ ": test1.log output", ?_assertEqual({ok, <<"foobar111\n">>}, FileData)},
                   {Title ++ ": state", ?_assertMatch(#{wbytes := 10}, State)}]
               end},
@@ -49,7 +49,7 @@ handler_with_maxbytes_test_() ->
                  ok = gen_event:sync_notify(Pid, {foo, <<"foobar33333">>}), %% 30 bytes
                  FileData = file:read_file(LogFile),
                  File1Data = file:read_file([LogFile, ".1"]),
-                 State = gen_event:call(Pid, {eventlogger_writer, 1}, dump_state),
+                 State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
                  [{Title ++ ": test1.log output",
                    ?_assertEqual({ok, <<"foobar33333\n">>}, FileData)},
                   {Title ++ ": test1.log.1 output",
@@ -68,7 +68,7 @@ handler_without_maxbytes_test_() ->
         LogFile = [TmpDir, "/test2.log"],
         ok =
             gen_event:add_handler(Pid,
-                                  {eventlogger_writer, 1},
+                                  {eventlogger_file_writer, 1},
                                   [{event, foo},
                                    {file, LogFile},
                                    {modes, [append, raw, write]},
@@ -87,7 +87,7 @@ handler_without_maxbytes_test_() ->
               fun(Title) ->
                  ok = gen_event:sync_notify(Pid, {bar, <<"foobar000">>}),
                  FileData = file:read_file(LogFile),
-                 State = gen_event:call(Pid, {eventlogger_writer, 1}, dump_state),
+                 State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
                  [{Title ++ ": test2.log output", ?_assertEqual({ok, <<>>}, FileData)},
                   {Title ++ ": state",
                    ?_assertMatch(#{modes := [append, raw, write], wbytes := 0}, State)}]
@@ -96,7 +96,7 @@ handler_without_maxbytes_test_() ->
               fun(Title) ->
                  ok = gen_event:sync_notify(Pid, {foo, <<"foobar111">>}),
                  FileData = file:read_file(LogFile),
-                 State = gen_event:call(Pid, {eventlogger_writer, 1}, dump_state),
+                 State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
                  [{Title ++ ": test2.log output", ?_assertEqual({ok, <<"foobar111\n">>}, FileData)},
                   {Title ++ ": state", ?_assertMatch(#{wbytes := 10}, State)}]
               end},
@@ -107,7 +107,7 @@ handler_without_maxbytes_test_() ->
                  ok = gen_event:sync_notify(Pid, {foo, <<"foobar444">>}),
                  ok = gen_event:sync_notify(Pid, {foo, <<"foobar555">>}),
                  FileData = file:read_file(LogFile),
-                 State = gen_event:call(Pid, {eventlogger_writer, 1}, dump_state),
+                 State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
                  [{Title ++ ": test2.log output",
                    ?_assertEqual({ok,
                                   <<"foobar111\n",

@@ -20,21 +20,21 @@ Add arbitrary logger configurations:
 ```
 {eventlogger, [
                {loggers, [
-                          {eventlogger_writer,
+                          {eventlogger_file_writer,
                            foo_logger,
                            [{event, foo},
                             {file, "log/foo.log"},
                             {maxbytes, 10485760}, %% 10 MB per file
                             {count, 3} %% rotation keeps 3 generations
                            ]},
-                          {eventlogger_writer,
+                          {eventlogger_file_writer,
                            bar_logger,
                            [{event, bar},
                             {file, "log/bar.log"},
                             {maxbytes, 1048576} %% 1 MB per file
                             {count, infinity} %% no limit on rotation count
                            ]},
-                          {eventlogger_writer,
+                          {eventlogger_file_writer,
                            buz_logger,
                            [{event, buz},
                             {file, "log/buz.log"},
