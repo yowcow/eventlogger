@@ -6,7 +6,7 @@ handler_with_maxbytes_test_() ->
     {setup,
      fun() ->
         {ok, TmpDir} = eventlogger_util:tmpdir(["/tmp/", ?MODULE]),
-        {ok, Pid} = gen_event:start_link({local, ?MODULE}),
+        {ok, Pid} = gen_event:start_link({local, eventlogger_file_writer_tests_1}),
         LogFile = [TmpDir, "/test1.log"],
         ok =
             gen_event:add_handler(Pid,
@@ -85,7 +85,7 @@ handler_without_maxbytes_test_() ->
     {setup,
      fun() ->
         {ok, TmpDir} = eventlogger_util:tmpdir(["/tmp/", ?MODULE]),
-        {ok, Pid} = gen_event:start_link({local, ?MODULE}),
+        {ok, Pid} = gen_event:start_link({local, eventlogger_file_writer_tests_2}),
         LogFile = [TmpDir, "/test2.log"],
         ok =
             gen_event:add_handler(Pid,
