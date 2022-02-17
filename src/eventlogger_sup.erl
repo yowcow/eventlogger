@@ -39,12 +39,20 @@ delete_writer(Module, Id, Args) ->
     gen_event:delete_handler(?MANAGER, {Module, Id}, Args).
 
 -spec notify(Event :: atom(), Log :: binary()) -> ok.
+notify(Event, Log) ->
+    case whereis(?MANAGER) of
+        Pid when is_pid(Pid) ->
+            notify(Pid, Event, Log);
+        _ ->
+            undefined
+    end.
+
 -ifdef(TEST).
-notify(Event, Log) ->
-    gen_event:sync_notify(?MANAGER, {Event, Log}).
+notify(Pid, Event, Log) ->
+    gen_event:sync_notify(Pid, {Event, Log}).
 -else.
-notify(Event, Log) ->
-    gen_event:notify(?MANAGER, {Event, Log}).
+notify(Pid, Event, Log) ->
+    gen_event:notify(Pid, {Event, Log}).
 -endif.
 
 -spec call(Writer :: module(), Id :: term(), Req :: term()) -> term().
