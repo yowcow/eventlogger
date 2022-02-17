@@ -48,12 +48,12 @@ handler_with_maxbytes_test_() ->
                  ok = gen_event:sync_notify(Pid, {foo, <<"foobar222">>}), %% 20 bytes
                  ok = gen_event:sync_notify(Pid, {foo, <<"foobar33333">>}), %% 30 bytes
                  FileData = file:read_file(LogFile),
-                 File1Data = file:read_file([LogFile, ".1"]),
+                 File0Data = file:read_file([LogFile, ".0"]),
                  State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
                  [{Title ++ ": test1.log output",
                    ?_assertEqual({ok, <<"foobar33333\n">>}, FileData)},
-                  {Title ++ ": test1.log.1 output",
-                   ?_assertEqual({ok, <<"foobar111\nfoobar222\n">>}, File1Data)},
+                  {Title ++ ": test1.log.0 output",
+                   ?_assertEqual({ok, <<"foobar111\nfoobar222\n">>}, File0Data)},
                   {Title ++ ": state", ?_assertMatch(#{wbytes := 12}, State)}]
               end},
              {"somehow file has vanished but write continues",

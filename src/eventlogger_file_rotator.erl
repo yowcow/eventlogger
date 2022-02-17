@@ -61,13 +61,13 @@ rotate_infinite(File, Index) ->
 rotate_finite(_File, _Count, 0) ->
     ok;
 rotate_finite(File, Count, Index) ->
-    CurFile = [File, ".", integer_to_list(Index)],
+    CurFile = [File, ".", integer_to_list(Index - 1)],
     NextFile =
         case Index of
             1 ->
                 File;
             _ ->
-                [File, ".", integer_to_list(Index - 1)]
+                [File, ".", integer_to_list(Index - 2)]
         end,
     case filelib:is_regular(NextFile) of
         true ->
