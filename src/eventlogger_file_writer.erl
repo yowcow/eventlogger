@@ -4,6 +4,7 @@
 
 -export([init/1, terminate/2, handle_call/2, handle_event/2, handle_info/2]).
 
+-include_lib("kernel/include/file.hrl").
 -include_lib("kernel/include/logger.hrl").
 
 %% Taken from lager_file_backend
@@ -12,25 +13,27 @@
 
 -record(state,
         {event = default :: atom(),
-         file = undefined :: string() | undefined,
+         file = undefined :: file:name_all() | undefined,
          modes = [append, raw, {delayed_write, ?DEFAULT_SYNC_SIZE, ?DEFAULT_SYNC_INTERVAL}] ::
              [file:mode()],
          maxbytes = infinity :: maxbytes(),
          count = infinity :: count(),
-         delim = <<"\n">> :: binary(),
-         iodev = undefined :: file:io_device() | undefined,
+         delimiter = <<"\n">> :: binary(),
+         io = undefined :: io() | undefined,
          wbytes = 0 :: integer()}).
 
+-type inode() :: non_neg_integer().
+-type io() :: {file:io_device(), inode()}.
 -type maxbytes() :: eventlogger_file_rotator:maxbytes().
 -type count() :: eventlogger_file_rotator:count().
 -type state() :: #state{}.
 -type args() ::
     [{event, atom()} |
-     {file, string()} |
+     {file, file:name_all()} |
      {modes, [file:mode()]} |
      {maxbytes, maxbytes()} |
      {count, count()} |
-     {delim, binary()}].
+     {delimiter, binary()}].
 
 -spec init(Args :: args()) -> {ok, state()}.
 init(Args) ->
@@ -45,26 +48,22 @@ init(Args) ->
                             Acc#state{maxbytes = V};
                         ({count, V}, Acc) ->
                             Acc#state{count = V};
-                        ({delim, V}, Acc) ->
-                            Acc#state{delim = V};
+                        ({delimiter, V}, Acc) ->
+                            Acc#state{delimiter = V};
                         (_, Acc) ->
                             Acc
                     end,
                     #state{},
                     Args),
-    case eventlogger_file_rotator:open(State#state.file,
-                                       State#state.modes,
-                                       State#state.maxbytes,
-                                       State#state.count)
-    of
-        {{ok, IoDevice}, WrittenBytes} ->
-            {ok, State#state{iodev = IoDevice, wbytes = WrittenBytes}};
-        {Err, _} ->
+    case open_file(State) of
+        {ok, {Io, WrittenBytes}} ->
+            {ok, State#state{io = Io, wbytes = WrittenBytes}};
+        Err ->
             Err
     end.
 
 -spec terminate(Reason :: term(), State :: state()) -> ok.
-terminate(Reason, #state{iodev = IoDevice} = State) ->
+terminate(Reason, #state{io = {IoDevice, _}} = State) ->
     ?LOG_INFO("terminate (~p, ~p)", [Reason, State]),
     file:close(IoDevice),
     ok.
@@ -76,54 +75,26 @@ handle_call(dump_state, State) ->
        modes => State#state.modes,
        maxbytes => State#state.maxbytes,
        count => State#state.count,
-       delim => State#state.delim,
-       iodev => State#state.iodev,
+       delimiter => State#state.delimiter,
+       io => State#state.io,
        wbytes => State#state.wbytes},
      State};
 handle_call(Req, State) ->
     ?LOG_WARNING("unhandled call (~p, ~p)", [Req, State]),
     {ok, {error, {unhandled_call, Req}}, State}.
 
-handle_event({Event, Bytes} = Req, #state{event = Event} = State) ->
-    #state{maxbytes = MaxBytes,
-           iodev = IoDevice,
-           delim = Delimiter,
-           wbytes = WrittenBytes} =
-        State,
-    Output = <<Bytes/binary, Delimiter/binary>>,
-    case file:write(IoDevice, Output) of
-        ok ->
-            Ret = case MaxBytes of
-                      infinity ->
-                          {ok, {WrittenBytes + byte_size(Output), IoDevice}};
-                      _ ->
-                          CurWrittenBytes = WrittenBytes + byte_size(Output),
-                          case CurWrittenBytes < MaxBytes of
-                              true ->
-                                  {ok, {CurWrittenBytes, IoDevice}};
-                              _ ->
-                                  eventlogger_file_rotator:close(IoDevice),
-                                  case eventlogger_file_rotator:open(State#state.file,
-                                                                     State#state.modes,
-                                                                     State#state.maxbytes,
-                                                                     State#state.count)
-                                  of
-                                      {{ok, IoD}, WBytes} ->
-                                          {ok, {WBytes, IoD}};
-                                      Err ->
-                                          Err
-                                  end
-                          end
-                  end,
-            case Ret of
-                {ok, {NewWrittenBytes, NewIoDevice}} ->
-                    {ok, State#state{iodev = NewIoDevice, wbytes = NewWrittenBytes}};
-                Err2 ->
-                    ?LOG_ERROR("failed rotating files: ~p (~p, ~p)", [Err2, Req, State]),
+handle_event({Event, Output} = Req, #state{event = Event} = State) ->
+    case ensure_file(State) of
+        {ok, {Io, WrittenBytes}} ->
+            case write_to_file(Output, State#state{io = Io, wbytes = WrittenBytes}) of
+                {ok, NewState} ->
+                    {ok, NewState};
+                {error, Reason2} ->
+                    ?LOG_ERROR("failed writing to file: ~p (~p, ~p)", [Reason2, Req, State]),
                     remove_handler
             end;
-        Err1 ->
-            ?LOG_ERROR("failed writing to the io_device: ~p (~p, ~p)", [Err1, Req, State]),
+        {error, Reason1} ->
+            ?LOG_ERROR("failed ensuring an open file: ~p (~p, ~p)", [Reason1, Req, State]),
             remove_handler
     end;
 handle_event(_Event, State) ->
@@ -132,3 +103,72 @@ handle_event(_Event, State) ->
 handle_info(Info, State) ->
     ?LOG_WARNING("unhandled info (~p, ~p)", [Info, State]),
     {ok, State}.
+
+%% private funs
+-spec open_file(State :: state()) -> {ok, {io(), non_neg_integer()}} | {error, term()}.
+open_file(State) ->
+    case eventlogger_file_rotator:open(State#state.file,
+                                       State#state.modes,
+                                       State#state.maxbytes,
+                                       State#state.count)
+    of
+        {{ok, IoDevice}, WrittenBytes} ->
+            {ok, #file_info{inode = Inode}} = file:read_file_info(State#state.file, [raw]),
+            {ok, {{IoDevice, Inode}, WrittenBytes}};
+        {{error, Reason}, _} ->
+            {error, Reason}
+    end.
+
+-spec ensure_file(State :: state()) -> {ok, {io(), non_neg_integer()}} | {error, term()}.
+ensure_file(#state{file = File, io = {_, Inode0}} = State) ->
+    case is_file_changed(File, Inode0) of
+        true ->
+            ?LOG_DEBUG("(~p) detected file change on ~ts", [File]),
+            open_file(State);
+        _ ->
+            {ok, {State#state.io, State#state.wbytes}}
+    end.
+
+-spec is_file_changed(file:name_all(), inode()) -> boolean().
+is_file_changed(File, Inode0) ->
+    case file:read_file_info(File, [raw]) of
+        {ok, #file_info{inode = Inode1}} ->
+            Inode0 =/= Inode1;
+        _ ->
+            true
+    end.
+
+-spec write_to_file(Output0 :: binary(), State :: state()) ->
+                       {ok, state()} | {error, term()}.
+write_to_file(Output0,
+              #state{maxbytes = MaxBytes,
+                     delimiter = Delimiter,
+                     io = {IoDevice0, _} = Io0,
+                     wbytes = WrittenBytes0} =
+                  State) ->
+    Output = <<Output0/binary, Delimiter/binary>>,
+    case file:write(IoDevice0, Output) of
+        ok ->
+            Result =
+                case MaxBytes of
+                    infinity ->
+                        {ok, {Io0, WrittenBytes0 + byte_size(Output)}};
+                    _ ->
+                        CurWrittenBytes = WrittenBytes0 + byte_size(Output),
+                        case CurWrittenBytes < MaxBytes of
+                            true ->
+                                {ok, {Io0, CurWrittenBytes}};
+                            _ ->
+                                eventlogger_file_rotator:close(IoDevice0),
+                                open_file(State)
+                        end
+                end,
+            case Result of
+                {ok, {Io1, WrittenBytes1}} ->
+                    {ok, State#state{io = Io1, wbytes = WrittenBytes1}};
+                Err2 ->
+                    Err2
+            end;
+        Err1 ->
+            Err1
+    end.
