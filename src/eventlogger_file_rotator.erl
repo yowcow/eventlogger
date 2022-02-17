@@ -38,7 +38,7 @@ open(File, Modes, MaxBytes, Count) ->
 -spec rotate_files(File :: file:name_all(), Count :: count()) -> ok.
 rotate_files(File, infinity) ->
     %% without limit on rotation count
-    rotate_infinite(File, 1);
+    rotate_infinite(File, 0);
 rotate_files(File, Count) ->
     %% with limit on rotation count
     rotate_finite(File, Count, Count).
