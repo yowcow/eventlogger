@@ -1,4 +1,4 @@
--module(eventlogger_writer).
+-module(eventlogger_file_writer).
 
 -behavior(gen_event).
 
@@ -6,18 +6,23 @@
 
 -include_lib("kernel/include/logger.hrl").
 
+%% Taken from lager_file_backend
+-define(DEFAULT_SYNC_INTERVAL, 1000).
+-define(DEFAULT_SYNC_SIZE, 1024 * 64). %% 64kb
+
 -record(state,
         {event = default :: atom(),
          file = undefined :: string() | undefined,
-         modes = [append, raw, delayed_write] :: [file:mode()],
+         modes = [append, raw, {delayed_write, ?DEFAULT_SYNC_SIZE, ?DEFAULT_SYNC_INTERVAL}] ::
+             [file:mode()],
          maxbytes = infinity :: maxbytes(),
          count = infinity :: count(),
          delim = <<"\n">> :: binary(),
          iodev = undefined :: file:io_device() | undefined,
          wbytes = 0 :: integer()}).
 
--type maxbytes() :: eventlogger_rotator:maxbytes().
--type count() :: eventlogger_rotator:count().
+-type maxbytes() :: eventlogger_file_rotator:maxbytes().
+-type count() :: eventlogger_file_rotator:count().
 -type state() :: #state{}.
 -type args() ::
     [{event, atom()} |
@@ -47,10 +52,10 @@ init(Args) ->
                     end,
                     #state{},
                     Args),
-    case eventlogger_rotator:open(State#state.file,
-                                  State#state.modes,
-                                  State#state.maxbytes,
-                                  State#state.count)
+    case eventlogger_file_rotator:open(State#state.file,
+                                       State#state.modes,
+                                       State#state.maxbytes,
+                                       State#state.count)
     of
         {{ok, IoDevice}, WrittenBytes} ->
             {ok, State#state{iodev = IoDevice, wbytes = WrittenBytes}};
@@ -97,11 +102,11 @@ handle_event({Event, Bytes} = Req, #state{event = Event} = State) ->
                               true ->
                                   {ok, {CurWrittenBytes, IoDevice}};
                               _ ->
-                                  eventlogger_rotator:close(IoDevice),
-                                  case eventlogger_rotator:open(State#state.file,
-                                                                State#state.modes,
-                                                                State#state.maxbytes,
-                                                                State#state.count)
+                                  eventlogger_file_rotator:close(IoDevice),
+                                  case eventlogger_file_rotator:open(State#state.file,
+                                                                     State#state.modes,
+                                                                     State#state.maxbytes,
+                                                                     State#state.count)
                                   of
                                       {{ok, IoD}, WBytes} ->
                                           {ok, {WBytes, IoD}};

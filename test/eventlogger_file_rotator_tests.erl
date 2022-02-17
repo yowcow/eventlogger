@@ -1,4 +1,4 @@
--module(eventlogger_rotator_tests).
+-module(eventlogger_file_rotator_tests).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -18,12 +18,12 @@ open_close_test_() ->
             [{"initial open test1.log",
               fun(Title) ->
                  {{ok, IoDevice}, WBytes} =
-                     eventlogger_rotator:open([TmpDir, "/test1.log"],
+                     eventlogger_file_rotator:open([TmpDir, "/test1.log"],
                                               [write, append, raw],
                                               ?MAXBYTES,
                                               ?COUNT),
                  ok = file:write(IoDevice, <<"hoge\n">>),
-                 ok = eventlogger_rotator:close(IoDevice),
+                 ok = eventlogger_file_rotator:close(IoDevice),
                  FileData = file:read_file([TmpDir, "/test1.log"]),
                  [{Title ++ ": wbytes", ?_assertEqual(0, WBytes)},
                   {Title ++ ": test1.log", ?_assertEqual({ok, <<"hoge\n">>}, FileData)}]
@@ -31,12 +31,12 @@ open_close_test_() ->
              {"re-open test1.log",
               fun(Title) ->
                  {{ok, IoDevice}, WBytes} =
-                     eventlogger_rotator:open([TmpDir, "/test1.log"],
+                     eventlogger_file_rotator:open([TmpDir, "/test1.log"],
                                               [write, append, raw],
                                               ?MAXBYTES,
                                               ?COUNT),
                  ok = file:write(IoDevice, <<"fuga\n">>),
-                 ok = eventlogger_rotator:close(IoDevice),
+                 ok = eventlogger_file_rotator:close(IoDevice),
                  FileData = file:read_file([TmpDir, "/test1.log"]),
                  [{Title ++ ": wbytes", ?_assertEqual(5, WBytes)},
                   {Title ++ ": test1.log", ?_assertEqual({ok, <<"hoge\nfuga\n">>}, FileData)}]
@@ -44,12 +44,12 @@ open_close_test_() ->
              {"rotate creates test1.log.1 and open test1.log",
               fun(Title) ->
                  {{ok, IoDevice}, WBytes} =
-                     eventlogger_rotator:open([TmpDir, "/test1.log"],
+                     eventlogger_file_rotator:open([TmpDir, "/test1.log"],
                                               [write, append, raw],
                                               ?MAXBYTES,
                                               ?COUNT),
                  ok = file:write(IoDevice, <<"foobarbuz123\n">>),
-                 ok = eventlogger_rotator:close(IoDevice),
+                 ok = eventlogger_file_rotator:close(IoDevice),
                  FileData = file:read_file([TmpDir, "/test1.log"]),
                  File1Data = file:read_file([TmpDir, "/test1.log.1"]),
                  [{Title ++ ": wbytes", ?_assertEqual(0, WBytes)},
@@ -59,12 +59,12 @@ open_close_test_() ->
              {"rotate creates test1.log.2 and open test1.log",
               fun(Title) ->
                  {{ok, IoDevice}, WBytes} =
-                     eventlogger_rotator:open([TmpDir, "/test1.log"],
+                     eventlogger_file_rotator:open([TmpDir, "/test1.log"],
                                               [write, append, raw],
                                               ?MAXBYTES,
                                               ?COUNT),
                  ok = file:write(IoDevice, <<"foobarbuz234\n">>),
-                 ok = eventlogger_rotator:close(IoDevice),
+                 ok = eventlogger_file_rotator:close(IoDevice),
                  FileData = file:read_file([TmpDir, "/test1.log"]),
                  File1Data = file:read_file([TmpDir, "/test1.log.1"]),
                  File2Data = file:read_file([TmpDir, "/test1.log.2"]),
@@ -76,12 +76,12 @@ open_close_test_() ->
              {"rotate deletes oldest generation and open test1.log",
               fun(Title) ->
                  {{ok, IoDevice}, WBytes} =
-                     eventlogger_rotator:open([TmpDir, "/test1.log"],
+                     eventlogger_file_rotator:open([TmpDir, "/test1.log"],
                                               [write, append, raw],
                                               ?MAXBYTES,
                                               ?COUNT),
                  ok = file:write(IoDevice, <<"foobarbuz345\n">>),
-                 ok = eventlogger_rotator:close(IoDevice),
+                 ok = eventlogger_file_rotator:close(IoDevice),
                  FileData = file:read_file([TmpDir, "/test1.log"]),
                  File1Data = file:read_file([TmpDir, "/test1.log.1"]),
                  File2Data = file:read_file([TmpDir, "/test1.log.2"]),
@@ -95,12 +95,12 @@ open_close_test_() ->
              {"count=infinity rotates current file to the greatest index",
               fun(Title) ->
                  {{ok, IoDevice}, WBytes} =
-                     eventlogger_rotator:open([TmpDir, "/test1.log"],
+                     eventlogger_file_rotator:open([TmpDir, "/test1.log"],
                                               [write, append, raw],
                                               ?MAXBYTES,
                                               infinity),
                  ok = file:write(IoDevice, <<"foobarbuz456\n">>),
-                 ok = eventlogger_rotator:close(IoDevice),
+                 ok = eventlogger_file_rotator:close(IoDevice),
                  FileData = file:read_file([TmpDir, "/test1.log"]),
                  File1Data = file:read_file([TmpDir, "/test1.log.1"]),
                  File2Data = file:read_file([TmpDir, "/test1.log.2"]),

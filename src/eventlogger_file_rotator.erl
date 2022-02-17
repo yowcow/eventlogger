@@ -1,4 +1,4 @@
--module(eventlogger_rotator).
+-module(eventlogger_file_rotator).
 
 -export([open/4, close/1]).
 
