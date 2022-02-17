@@ -58,7 +58,7 @@ handler_with_maxbytes_test_() ->
               end},
              {"somehow file has vanished but write continues",
               fun(Title) ->
-                 file:delete(LogFile, [raw]),
+                 file:delete(LogFile),
                  ok = gen_event:sync_notify(Pid, {foo, <<"vanished111">>}), %% 20 bytes
                  FileData = file:read_file(LogFile),
                  State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
@@ -68,7 +68,7 @@ handler_with_maxbytes_test_() ->
               end},
              {"somehow file is recreated but write continues",
               fun(Title) ->
-                 ok = file:delete(LogFile, [raw]),
+                 ok = file:delete(LogFile),
                  ok = file:write_file(LogFile, <<"foo1\n">>, [write, raw]),
                  ok = gen_event:sync_notify(Pid, {foo, <<"foo2">>}), %% 12 bytes
                  FileData = file:read_file(LogFile),
