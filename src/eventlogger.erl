@@ -6,7 +6,7 @@
 format(Event, Format, Args) ->
     log(Event, io_lib:format(Format, Args)).
 
--spec log(Event :: atom(), Output :: binary()) -> ok.
+-spec log(Event :: atom(), Output :: binary()|string()) -> ok.
 log(Event, Output) when is_list(Output) ->
     log(Event, unicode:characters_to_binary(Output));
 log(Event, Output) ->
