@@ -38,7 +38,8 @@ Add arbitrary logger configurations:
                            buz_logger,
                            [{event, buz},
                             {file, "log/buz.log"},
-                            {maxbytes, infinity} %% no limit no file size
+                            {maxbytes, infinity}, %% no limit no file size
+                            {sampling_rate, 0.1} %% 10% of logs are written
                            ]}
                          ]}
               ]}
@@ -47,9 +48,9 @@ Add arbitrary logger configurations:
 Write events:
 
 ```
-eventlogger:write(foo, <<"Hello log/foo.log">>).
-eventlogger:write(bar, <<"Hi log/bar.log">>).
-eventlogger:write(buz, <<"Hi log/buz.log">>).
+eventlogger:log(foo, <<"Hello log/foo.log">>).
+eventlogger:log(bar, <<"Hi log/bar.log">>).
+eventlogger:log(buz, <<"Hi log/buz.log">>).
 ```
 
 
