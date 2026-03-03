@@ -89,7 +89,7 @@ handle_call(Req, State) ->
     {ok, {error, {unhandled_call, Req}}, State}.
 
 handle_event({Event, Output} = Req, #state{event = Event, sampling_rate = Rate} = State) ->
-    case rand:uniform() =< Rate of
+    case eventlogger_utils:is_sampled(Rate) of
         true ->
             case ensure_file(State) of
                 {ok, {Io, WrittenBytes}} ->

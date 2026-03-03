@@ -99,3 +99,39 @@ sampling_rate_half_test_() ->
              ?assert(Len < 600)
           end}]
      end}.
+
+log_sampling_test_() ->
+    {setup,
+     fun() ->
+        {ok, TmpDir} = eventlogger_util:tmpdir(["/tmp/", ?MODULE]),
+        {ok, Pid} = gen_event:start_link({local, eventlogger_manager}),
+        LogFile = [TmpDir, "/log_sampling.log"],
+        ok =
+            gen_event:add_handler(Pid,
+                                  {eventlogger_file_writer, 1},
+                                  [{event, foo},
+                                   {file, LogFile},
+                                   {modes, [append, raw, write]},
+                                   {sampling_rate, 1.0}]),
+        [{tmpdir, TmpDir}, {logfile, LogFile}, {gen_event, Pid}]
+     end,
+     fun(Args) ->
+        Pid = proplists:get_value(gen_event, Args),
+        gen_event:stop(Pid)
+     end,
+     fun(Args) ->
+        LogFile = proplists:get_value(logfile, Args),
+        [{"eventlogger:log/3 with 0.0 writes nothing",
+          fun() ->
+             [ ok = eventlogger:log(foo, <<"log">>, 0.0) || _ <- lists:seq(1, 100) ],
+             {ok, Data} = file:read_file(LogFile),
+             ?assertEqual(<<>>, Data)
+          end},
+         {"eventlogger:log/3 with 1.0 writes all",
+          fun() ->
+             [ ok = eventlogger:log(foo, <<"log">>, 1.0) || _ <- lists:seq(1, 100) ],
+             {ok, Data} = file:read_file(LogFile),
+             Lines = binary:split(Data, <<"\n">>, [global, trim]),
+             ?assertEqual(100, length(Lines))
+          end}]
+     end}.
