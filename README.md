@@ -38,7 +38,8 @@ Add arbitrary logger configurations:
                            buz_logger,
                            [{event, buz},
                             {file, "log/buz.log"},
-                            {maxbytes, infinity} %% no limit no file size
+                            {maxbytes, infinity}, %% no limit no file size
+                            {sampling_rate, 0.1} %% 10% of logs are written
                            ]}
                          ]}
               ]}
@@ -46,10 +47,14 @@ Add arbitrary logger configurations:
 
 Write events:
 
-```
-eventlogger:write(foo, <<"Hello log/foo.log">>).
-eventlogger:write(bar, <<"Hi log/bar.log">>).
-eventlogger:write(buz, <<"Hi log/buz.log">>).
+```erlang
+%% Write all logs (subject to handler's sampling_rate)
+eventlogger:log(foo, <<"Hello log/foo.log">>).
+
+%% Write with explicit sampling rate (compounds with handler's sampling_rate)
+%% If handler's sampling_rate is 0.1 and we call log/3 with 0.1, 
+%% the final output rate will be 1% (0.01).
+eventlogger:log(bar, <<"Hi log/bar.log">>, 0.1).
 ```
 
 

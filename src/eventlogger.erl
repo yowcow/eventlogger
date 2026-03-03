@@ -1,6 +1,6 @@
 -module(eventlogger).
 
--export([format/3, log/2]).
+-export([format/3, log/2, log/3]).
 
 -spec format(Event :: atom(), Format :: string(), Args :: [term()]) -> ok.
 format(Event, Format, Args) ->
@@ -11,3 +11,12 @@ log(Event, Output) when is_list(Output) ->
     log(Event, unicode:characters_to_binary(Output));
 log(Event, Output) ->
     eventlogger_sup:notify(Event, Output).
+
+-spec log(Event :: atom(), Output :: binary()|string(), Rate :: float()) -> ok.
+log(Event, Output, Rate) ->
+    case eventlogger_utils:is_sampled(Rate) of
+        true ->
+            log(Event, Output);
+        _ ->
+            ok
+    end.
