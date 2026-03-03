@@ -19,6 +19,7 @@
          maxbytes = infinity :: maxbytes(),
          count = infinity :: count(),
          delimiter = <<"\n">> :: binary(),
+         sampling_rate = 1.0 :: float(),
          io = undefined :: io() | undefined,
          wbytes = 0 :: integer()}).
 
@@ -33,7 +34,8 @@
      {modes, [file:mode()]} |
      {maxbytes, maxbytes()} |
      {count, count()} |
-     {delimiter, binary()}].
+     {delimiter, binary()} |
+     {sampling_rate, float()}].
 
 -spec init(Args :: args()) -> {ok, state()}.
 init(Args) ->
@@ -50,6 +52,8 @@ init(Args) ->
                             Acc#state{count = V};
                         ({delimiter, V}, Acc) ->
                             Acc#state{delimiter = V};
+                        ({sampling_rate, V}, Acc) ->
+                            Acc#state{sampling_rate = float(V)};
                         (_, Acc) ->
                             Acc
                     end,
@@ -76,6 +80,7 @@ handle_call(dump_state, State) ->
        maxbytes => State#state.maxbytes,
        count => State#state.count,
        delimiter => State#state.delimiter,
+       sampling_rate => State#state.sampling_rate,
        io => State#state.io,
        wbytes => State#state.wbytes},
      State};
@@ -83,19 +88,24 @@ handle_call(Req, State) ->
     ?LOG_WARNING("unhandled call (~p, ~p)", [Req, State]),
     {ok, {error, {unhandled_call, Req}}, State}.
 
-handle_event({Event, Output} = Req, #state{event = Event} = State) ->
-    case ensure_file(State) of
-        {ok, {Io, WrittenBytes}} ->
-            case write_to_file(Output, State#state{io = Io, wbytes = WrittenBytes}) of
-                {ok, NewState} ->
-                    {ok, NewState};
-                {error, Reason2} ->
-                    ?LOG_ERROR("failed writing to file: ~p (~p, ~p)", [Reason2, Req, State]),
+handle_event({Event, Output} = Req, #state{event = Event, sampling_rate = Rate} = State) ->
+    case rand:uniform() < Rate of
+        true ->
+            case ensure_file(State) of
+                {ok, {Io, WrittenBytes}} ->
+                    case write_to_file(Output, State#state{io = Io, wbytes = WrittenBytes}) of
+                        {ok, NewState} ->
+                            {ok, NewState};
+                        {error, Reason2} ->
+                            ?LOG_ERROR("failed writing to file: ~p (~p, ~p)", [Reason2, Req, State]),
+                            remove_handler
+                    end;
+                {error, Reason1} ->
+                    ?LOG_ERROR("failed ensuring an open file: ~p (~p, ~p)", [Reason1, Req, State]),
                     remove_handler
             end;
-        {error, Reason1} ->
-            ?LOG_ERROR("failed ensuring an open file: ~p (~p, ~p)", [Reason1, Req, State]),
-            remove_handler
+        false ->
+            {ok, State}
     end;
 handle_event(_Event, State) ->
     {ok, State}.
