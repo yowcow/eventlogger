@@ -184,7 +184,7 @@ open_file(State) ->
 ensure_file(#state{file = File, io = {OldIoDevice, Inode0}} = State) ->
     case is_file_changed(File, Inode0) of
         true ->
-            ?LOG_DEBUG("(~p) detected file change on ~ts", [File]),
+            ?LOG_DEBUG("detected file change on ~ts", [File]),
             %% Close the old fd only after a new one is confirmed open, so a
             %% failed reopen leaves the (still valid) old fd in place rather
             %% than dropping to zero open file handles.
