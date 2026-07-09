@@ -156,15 +156,18 @@ write_to_file(Output0,
                      io = {IoDevice0, _} = Io0,
                      wbytes = WrittenBytes0} =
                   State) ->
-    Output = <<Output0/binary, Delimiter/binary>>,
-    case file:write(IoDevice0, Output) of
+    %% Pass iodata straight to file:write/2 instead of concatenating into a
+    %% new binary first -- avoids copying the whole (often multi-KB) Output0
+    %% just to append a delimiter.
+    OutputSize = byte_size(Output0) + byte_size(Delimiter),
+    case file:write(IoDevice0, [Output0, Delimiter]) of
         ok ->
             Result =
                 case MaxBytes of
                     infinity ->
-                        {ok, {Io0, WrittenBytes0 + byte_size(Output)}};
+                        {ok, {Io0, WrittenBytes0 + OutputSize}};
                     _ ->
-                        CurWrittenBytes = WrittenBytes0 + byte_size(Output),
+                        CurWrittenBytes = WrittenBytes0 + OutputSize,
                         case CurWrittenBytes < MaxBytes of
                             true ->
                                 {ok, {Io0, CurWrittenBytes}};
