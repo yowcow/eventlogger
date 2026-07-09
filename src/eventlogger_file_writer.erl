@@ -97,6 +97,7 @@ handle_call(dump_state, State) ->
        delimiter => State#state.delimiter,
        sampling_rate => State#state.sampling_rate,
        check_interval => State#state.check_interval,
+       timer_ref => State#state.timer_ref,
        io => State#state.io,
        wbytes => State#state.wbytes},
      State};
@@ -123,7 +124,16 @@ handle_event(_Event, State) ->
 %% Periodic, decoupled-from-writes check for an externally rotated/replaced
 %% file (F6). Runs on ?DEFAULT_CHECK_INTERVAL (or the configured
 %% check_interval) instead of on every handle_event/2 call.
-handle_info(?CHECK_FILE_CHANGED, State) ->
+%%
+%% Several eventlogger_file_writer instances (e.g. rtb_v2_log and
+%% req_res_log) are typically installed on the SAME gen_event manager, which
+%% broadcasts any raw message (including our timer message) to every
+%% installed handler's handle_info/2, not just the one that scheduled it.
+%% erlang:start_timer/3 embeds a fresh reference in the delivered
+%% {timeout, Ref, _} message, so we can tell "this is the check I scheduled"
+%% (Ref matches our own timer_ref) apart from another handler's timer (or a
+%% stale one of our own) and ignore the latter without rescheduling.
+handle_info({timeout, Ref, ?CHECK_FILE_CHANGED}, #state{timer_ref = Ref} = State) ->
     NewState =
         case ensure_file(State) of
             {ok, {Io, WrittenBytes}} ->
@@ -133,6 +143,10 @@ handle_info(?CHECK_FILE_CHANGED, State) ->
                 State
         end,
     {ok, schedule_check(NewState)};
+handle_info({timeout, _OtherRef, ?CHECK_FILE_CHANGED}, State) ->
+    %% Belongs to a different handler instance on the same manager (or a
+    %% stale timer of our own); we already have our own timer pending.
+    {ok, State};
 handle_info(Info, State) ->
     ?LOG_WARNING("unhandled info (~p, ~p)", [Info, State]),
     {ok, State}.
@@ -140,7 +154,7 @@ handle_info(Info, State) ->
 %% private funs
 -spec schedule_check(State :: state()) -> state().
 schedule_check(#state{check_interval = Interval} = State) ->
-    TimerRef = erlang:send_after(Interval, self(), ?CHECK_FILE_CHANGED),
+    TimerRef = erlang:start_timer(Interval, self(), ?CHECK_FILE_CHANGED),
     State#state{timer_ref = TimerRef}.
 
 -spec cancel_check(TimerRef :: reference() | undefined) -> ok.

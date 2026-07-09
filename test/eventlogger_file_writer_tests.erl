@@ -65,11 +65,17 @@ handler_with_maxbytes_test_() ->
               fun(Title) ->
                  %% External file-change detection (F6) now runs on a timer
                  %% instead of on every write, so the test drives it
-                 %% explicitly with the same message the timer would send.
-                 %% Message order from this process to Pid is preserved, so
-                 %% the check is guaranteed to run before the notify below.
+                 %% explicitly with the same {timeout, Ref, _} message the
+                 %% real timer would send (Ref must match the handler's own
+                 %% current timer_ref, since gen_event broadcasts handle_info
+                 %% to every installed handler -- see eventlogger_file_writer
+                 %% moduledoc). Message order from this process to Pid is
+                 %% preserved, so the check is guaranteed to run before the
+                 %% notify below.
                  file:delete(LogFile),
-                 Pid ! '$eventlogger_check_file_changed',
+                 #{timer_ref := TimerRef1} =
+                     gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
+                 Pid ! {timeout, TimerRef1, '$eventlogger_check_file_changed'},
                  ok = gen_event:sync_notify(Pid, {foo, <<"vanished111">>}), %% 20 bytes
                  FileData = file:read_file(LogFile),
                  State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
@@ -81,7 +87,9 @@ handler_with_maxbytes_test_() ->
               fun(Title) ->
                  ok = file:delete(LogFile),
                  ok = file:write_file(LogFile, <<"foo1\n">>, [write, raw]),
-                 Pid ! '$eventlogger_check_file_changed',
+                 #{timer_ref := TimerRef2} =
+                     gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
+                 Pid ! {timeout, TimerRef2, '$eventlogger_check_file_changed'},
                  ok = gen_event:sync_notify(Pid, {foo, <<"foo2">>}), %% 12 bytes
                  FileData = file:read_file(LogFile),
                  State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
@@ -150,6 +158,26 @@ handler_without_maxbytes_test_() ->
                                     "foobar555\n">>},
                                  FileData)},
                   {Title ++ ": state", ?_assertMatch(#{wbytes := 50}, State)}]
+              end},
+             {"a timer message belonging to another handler on the same "
+              "manager (mismatched ref) is ignored",
+              fun(Title) ->
+                 %% Several eventlogger_file_writer instances are typically
+                 %% installed on the same gen_event manager and all receive
+                 %% every raw message sent to it, so a foreign/mismatched
+                 %% timer ref must be a no-op rather than triggering a
+                 %% reopen or a reschedule.
+                 #{timer_ref := TimerRefBefore, wbytes := WBytesBefore} =
+                     gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
+                 ForeignRef = make_ref(),
+                 Pid ! {timeout, ForeignRef, '$eventlogger_check_file_changed'},
+                 ok = gen_event:sync_notify(Pid, {foo, <<"unaffected">>}),
+                 #{timer_ref := TimerRefAfter, wbytes := WBytesAfter} =
+                     gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
+                 [{Title ++ ": timer_ref is unchanged (no reschedule happened)",
+                   ?_assertEqual(TimerRefBefore, TimerRefAfter)},
+                  {Title ++ ": write still went through normally",
+                   ?_assertEqual(WBytesBefore + byte_size(<<"unaffected\n">>), WBytesAfter)}]
               end}],
         F = fun({Title, Test}) -> Test(Title) end,
         lists:map(F, Cases)
