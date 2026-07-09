@@ -84,7 +84,7 @@ init(Args) ->
 terminate(Reason, #state{io = {IoDevice, _}, timer_ref = TimerRef} = State) ->
     ?LOG_INFO("terminate (~p, ~p)", [Reason, State]),
     cancel_check(TimerRef),
-    file:close(IoDevice),
+    eventlogger_file_rotator:close(IoDevice),
     ok.
 
 handle_call(dump_state, State) ->

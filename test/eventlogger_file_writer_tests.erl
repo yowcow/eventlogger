@@ -113,7 +113,12 @@ handler_without_maxbytes_test_() ->
                                   [{event, foo},
                                    {file, LogFile},
                                    {modes, [append, raw, write]},
-                                   {count, 2}]),
+                                   {count, 2},
+                                   %% Long enough that the real timer never
+                                   %% fires during this test, so the
+                                   %% mismatched-ref case below can assert
+                                   %% timer_ref/wbytes deterministically.
+                                   {check_interval, 60000}]),
         [{tmpdir, TmpDir}, {logfile, LogFile}, {gen_event, Pid}]
      end,
      fun(Args) ->
