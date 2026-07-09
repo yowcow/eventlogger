@@ -154,7 +154,9 @@ handle_info(Info, State) ->
 %% private funs
 -spec schedule_check(State :: state()) -> state().
 schedule_check(#state{check_interval = Interval} = State) ->
-    TimerRef = erlang:start_timer(Interval, self(), ?CHECK_FILE_CHANGED),
+    %% Clamp to avoid a tight reschedule loop (CPU spike) if check_interval
+    %% is misconfigured to 0 or a negative value in sys.config.
+    TimerRef = erlang:start_timer(max(1, Interval), self(), ?CHECK_FILE_CHANGED),
     State#state{timer_ref = TimerRef}.
 
 -spec cancel_check(TimerRef :: reference() | undefined) -> ok.

@@ -68,10 +68,10 @@ handler_with_maxbytes_test_() ->
                  %% explicitly with the same {timeout, Ref, _} message the
                  %% real timer would send (Ref must match the handler's own
                  %% current timer_ref, since gen_event broadcasts handle_info
-                 %% to every installed handler -- see eventlogger_file_writer
-                 %% moduledoc). Message order from this process to Pid is
-                 %% preserved, so the check is guaranteed to run before the
-                 %% notify below.
+                 %% to every installed handler -- see the handle_info/2
+                 %% clause comments above). Message order from this process
+                 %% to Pid is preserved, so the check is guaranteed to run
+                 %% before the notify below.
                  file:delete(LogFile),
                  #{timer_ref := TimerRef1} =
                      gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
