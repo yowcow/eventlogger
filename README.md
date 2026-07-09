@@ -40,6 +40,15 @@ Add arbitrary logger configurations:
                             {file, "log/buz.log"},
                             {maxbytes, infinity}, %% no limit no file size
                             {sampling_rate, 0.1} %% 10% of logs are written
+                           ]},
+                          {eventlogger_file_writer,
+                           qux_logger,
+                           [{event, qux},
+                            {file, "log/qux.log"},
+                            {maxbytes, infinity},
+                            %% how often (ms) to check for an externally
+                            %% rotated/replaced file; defaults to 1000
+                            {check_interval, 5000}
                            ]}
                          ]}
               ]}

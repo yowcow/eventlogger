@@ -1,6 +1,6 @@
 {application, eventlogger,
  [{description, "An OTP application"},
-  {vsn, "0.0.3"},
+  {vsn, "0.0.4"},
   {registered, []},
   {mod, {eventlogger_app, []}},
   {applications,
