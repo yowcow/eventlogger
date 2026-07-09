@@ -15,7 +15,12 @@ handler_with_maxbytes_test_() ->
                                    {file, LogFile},
                                    {modes, [append, raw, write]},
                                    {maxbytes, 15},
-                                   {count, 2}]),
+                                   {count, 2},
+                                   %% Long enough that the real timer never
+                                   %% fires during this test; the vanished/
+                                   %% recreated cases below trigger the
+                                   %% check explicitly instead.
+                                   {check_interval, 60000}]),
         [{tmpdir, TmpDir}, {logfile, LogFile}, {gen_event, Pid}]
      end,
      fun(Args) ->
@@ -58,7 +63,13 @@ handler_with_maxbytes_test_() ->
               end},
              {"somehow file has vanished but write continues",
               fun(Title) ->
+                 %% External file-change detection (F6) now runs on a timer
+                 %% instead of on every write, so the test drives it
+                 %% explicitly with the same message the timer would send.
+                 %% Message order from this process to Pid is preserved, so
+                 %% the check is guaranteed to run before the notify below.
                  file:delete(LogFile),
+                 Pid ! '$eventlogger_check_file_changed',
                  ok = gen_event:sync_notify(Pid, {foo, <<"vanished111">>}), %% 20 bytes
                  FileData = file:read_file(LogFile),
                  State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
@@ -70,6 +81,7 @@ handler_with_maxbytes_test_() ->
               fun(Title) ->
                  ok = file:delete(LogFile),
                  ok = file:write_file(LogFile, <<"foo1\n">>, [write, raw]),
+                 Pid ! '$eventlogger_check_file_changed',
                  ok = gen_event:sync_notify(Pid, {foo, <<"foo2">>}), %% 12 bytes
                  FileData = file:read_file(LogFile),
                  State = gen_event:call(Pid, {eventlogger_file_writer, 1}, dump_state),
