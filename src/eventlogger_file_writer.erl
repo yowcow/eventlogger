@@ -181,11 +181,20 @@ open_file(State) ->
     end.
 
 -spec ensure_file(State :: state()) -> {ok, {io(), non_neg_integer()}} | {error, term()}.
-ensure_file(#state{file = File, io = {_, Inode0}} = State) ->
+ensure_file(#state{file = File, io = {OldIoDevice, Inode0}} = State) ->
     case is_file_changed(File, Inode0) of
         true ->
             ?LOG_DEBUG("(~p) detected file change on ~ts", [File]),
-            open_file(State);
+            %% Close the old fd only after a new one is confirmed open, so a
+            %% failed reopen leaves the (still valid) old fd in place rather
+            %% than dropping to zero open file handles.
+            case open_file(State) of
+                {ok, _} = Result ->
+                    eventlogger_file_rotator:close(OldIoDevice),
+                    Result;
+                Err ->
+                    Err
+            end;
         _ ->
             {ok, {State#state.io, State#state.wbytes}}
     end.
