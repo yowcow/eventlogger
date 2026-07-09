@@ -11,6 +11,15 @@
 -define(DEFAULT_SYNC_INTERVAL, 1000).
 -define(DEFAULT_SYNC_SIZE, 1024 * 64). %% 64kb
 
+%% F6: detecting an externally-rotated/replaced file (e.g. by logrotate or a
+%% symlink swap) requires stat'ing the file via file:read_file_info/2. Doing
+%% this on every single event serializes an extra syscall per log line
+%% through the single gen_event process. Instead, the check runs on a timer
+%% and its result is cached in state; handle_event/2 always writes through
+%% the cached io without stat'ing first.
+-define(DEFAULT_CHECK_INTERVAL, 1000). %% ms
+-define(CHECK_FILE_CHANGED, '$eventlogger_check_file_changed').
+
 -record(state,
         {event = default :: atom(),
          file = undefined :: file:name_all() | undefined,
@@ -20,6 +29,8 @@
          count = infinity :: count(),
          delimiter = <<"\n">> :: binary(),
          sampling_rate = 1.0 :: float(),
+         check_interval = ?DEFAULT_CHECK_INTERVAL :: non_neg_integer(),
+         timer_ref = undefined :: reference() | undefined,
          io = undefined :: io() | undefined,
          wbytes = 0 :: integer()}).
 
@@ -35,7 +46,8 @@
      {maxbytes, maxbytes()} |
      {count, count()} |
      {delimiter, binary()} |
-     {sampling_rate, float()}].
+     {sampling_rate, float()} |
+     {check_interval, non_neg_integer()}].
 
 -spec init(Args :: args()) -> {ok, state()}.
 init(Args) ->
@@ -54,6 +66,8 @@ init(Args) ->
                             Acc#state{delimiter = V};
                         ({sampling_rate, V}, Acc) ->
                             Acc#state{sampling_rate = float(V)};
+                        ({check_interval, V}, Acc) ->
+                            Acc#state{check_interval = V};
                         (_, Acc) ->
                             Acc
                     end,
@@ -61,15 +75,16 @@ init(Args) ->
                     Args),
     case open_file(State) of
         {ok, {Io, WrittenBytes}} ->
-            {ok, State#state{io = Io, wbytes = WrittenBytes}};
+            {ok, schedule_check(State#state{io = Io, wbytes = WrittenBytes})};
         Err ->
             Err
     end.
 
 -spec terminate(Reason :: term(), State :: state()) -> ok.
-terminate(Reason, #state{io = {IoDevice, _}} = State) ->
+terminate(Reason, #state{io = {IoDevice, _}, timer_ref = TimerRef} = State) ->
     ?LOG_INFO("terminate (~p, ~p)", [Reason, State]),
-    file:close(IoDevice),
+    cancel_check(TimerRef),
+    eventlogger_file_rotator:close(IoDevice),
     ok.
 
 handle_call(dump_state, State) ->
@@ -81,6 +96,8 @@ handle_call(dump_state, State) ->
        count => State#state.count,
        delimiter => State#state.delimiter,
        sampling_rate => State#state.sampling_rate,
+       check_interval => State#state.check_interval,
+       timer_ref => State#state.timer_ref,
        io => State#state.io,
        wbytes => State#state.wbytes},
      State};
@@ -91,17 +108,11 @@ handle_call(Req, State) ->
 handle_event({Event, Output} = Req, #state{event = Event, sampling_rate = Rate} = State) ->
     case eventlogger_utils:is_sampled(Rate) of
         true ->
-            case ensure_file(State) of
-                {ok, {Io, WrittenBytes}} ->
-                    case write_to_file(Output, State#state{io = Io, wbytes = WrittenBytes}) of
-                        {ok, NewState} ->
-                            {ok, NewState};
-                        {error, Reason2} ->
-                            ?LOG_ERROR("failed writing to file: ~p (~p, ~p)", [Reason2, Req, State]),
-                            remove_handler
-                    end;
-                {error, Reason1} ->
-                    ?LOG_ERROR("failed ensuring an open file: ~p (~p, ~p)", [Reason1, Req, State]),
+            case write_to_file(Output, State) of
+                {ok, NewState} ->
+                    {ok, NewState};
+                {error, Reason} ->
+                    ?LOG_ERROR("failed writing to file: ~p (~p, ~p)", [Reason, Req, State]),
                     remove_handler
             end;
         false ->
@@ -110,11 +121,51 @@ handle_event({Event, Output} = Req, #state{event = Event, sampling_rate = Rate} 
 handle_event(_Event, State) ->
     {ok, State}.
 
+%% Periodic, decoupled-from-writes check for an externally rotated/replaced
+%% file (F6). Runs on ?DEFAULT_CHECK_INTERVAL (or the configured
+%% check_interval) instead of on every handle_event/2 call.
+%%
+%% Several eventlogger_file_writer instances (e.g. rtb_v2_log and
+%% req_res_log) are typically installed on the SAME gen_event manager, which
+%% broadcasts any raw message (including our timer message) to every
+%% installed handler's handle_info/2, not just the one that scheduled it.
+%% erlang:start_timer/3 embeds a fresh reference in the delivered
+%% {timeout, Ref, _} message, so we can tell "this is the check I scheduled"
+%% (Ref matches our own timer_ref) apart from another handler's timer (or a
+%% stale one of our own) and ignore the latter without rescheduling.
+handle_info({timeout, Ref, ?CHECK_FILE_CHANGED}, #state{timer_ref = Ref} = State) ->
+    NewState =
+        case ensure_file(State) of
+            {ok, {Io, WrittenBytes}} ->
+                State#state{io = Io, wbytes = WrittenBytes};
+            {error, Reason} ->
+                ?LOG_ERROR("failed ensuring an open file: ~p (~p)", [Reason, State]),
+                State
+        end,
+    {ok, schedule_check(NewState)};
+handle_info({timeout, _OtherRef, ?CHECK_FILE_CHANGED}, State) ->
+    %% Belongs to a different handler instance on the same manager (or a
+    %% stale timer of our own); we already have our own timer pending.
+    {ok, State};
 handle_info(Info, State) ->
     ?LOG_WARNING("unhandled info (~p, ~p)", [Info, State]),
     {ok, State}.
 
 %% private funs
+-spec schedule_check(State :: state()) -> state().
+schedule_check(#state{check_interval = Interval} = State) ->
+    %% Clamp to avoid a tight reschedule loop (CPU spike) if check_interval
+    %% is misconfigured to 0 or a negative value in sys.config.
+    TimerRef = erlang:start_timer(max(1, Interval), self(), ?CHECK_FILE_CHANGED),
+    State#state{timer_ref = TimerRef}.
+
+-spec cancel_check(TimerRef :: reference() | undefined) -> ok.
+cancel_check(undefined) ->
+    ok;
+cancel_check(TimerRef) ->
+    erlang:cancel_timer(TimerRef),
+    ok.
+
 -spec open_file(State :: state()) -> {ok, {io(), non_neg_integer()}} | {error, term()}.
 open_file(State) ->
     case eventlogger_file_rotator:open(State#state.file,
@@ -130,11 +181,20 @@ open_file(State) ->
     end.
 
 -spec ensure_file(State :: state()) -> {ok, {io(), non_neg_integer()}} | {error, term()}.
-ensure_file(#state{file = File, io = {_, Inode0}} = State) ->
+ensure_file(#state{file = File, io = {OldIoDevice, Inode0}} = State) ->
     case is_file_changed(File, Inode0) of
         true ->
-            ?LOG_DEBUG("(~p) detected file change on ~ts", [File]),
-            open_file(State);
+            ?LOG_DEBUG("detected file change on ~ts", [File]),
+            %% Close the old fd only after a new one is confirmed open, so a
+            %% failed reopen leaves the (still valid) old fd in place rather
+            %% than dropping to zero open file handles.
+            case open_file(State) of
+                {ok, _} = Result ->
+                    eventlogger_file_rotator:close(OldIoDevice),
+                    Result;
+                Err ->
+                    Err
+            end;
         _ ->
             {ok, {State#state.io, State#state.wbytes}}
     end.
@@ -156,15 +216,18 @@ write_to_file(Output0,
                      io = {IoDevice0, _} = Io0,
                      wbytes = WrittenBytes0} =
                   State) ->
-    Output = <<Output0/binary, Delimiter/binary>>,
-    case file:write(IoDevice0, Output) of
+    %% Pass iodata straight to file:write/2 instead of concatenating into a
+    %% new binary first -- avoids copying the whole (often multi-KB) Output0
+    %% just to append a delimiter.
+    OutputSize = byte_size(Output0) + byte_size(Delimiter),
+    case file:write(IoDevice0, [Output0, Delimiter]) of
         ok ->
             Result =
                 case MaxBytes of
                     infinity ->
-                        {ok, {Io0, WrittenBytes0 + byte_size(Output)}};
+                        {ok, {Io0, WrittenBytes0 + OutputSize}};
                     _ ->
-                        CurWrittenBytes = WrittenBytes0 + byte_size(Output),
+                        CurWrittenBytes = WrittenBytes0 + OutputSize,
                         case CurWrittenBytes < MaxBytes of
                             true ->
                                 {ok, {Io0, CurWrittenBytes}};
